@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Notes · Reader{% endblock %}
+{% block content %}
+<div class="page-heading"><div><h1>Notes & highlights</h1><p class="muted">Annotations from all your books.</p></div><a class="button" href="{{ url_for('exports.notes_markdown') }}">Export Markdown</a></div>
+<form class="filter-bar" method="get">
+  <input name="q" value="{{ query }}" placeholder="Search highlights and notes" aria-label="Search notes">
+  <select name="book_id" aria-label="Filter by book"><option value="">All books</option>{% for book in books %}<option value="{{ book.id }}"{% if selected_book == book.id %} selected{% endif %}>{{ book.title }}</option>{% endfor %}</select>
+  <select name="color" aria-label="Filter by color"><option value="">All colors</option>{% for color in ('yellow','green','blue','pink') %}<option value="{{ color }}"{% if selected_color == color %} selected{% endif %}>{{ color|capitalize }}</option>{% endfor %}</select>
+  <button type="submit">Filter</button>
+</form>
+{% if annotations %}<section class="study-list">
+{% for annotation in annotations %}<article class="study-card annotation-card {{ annotation.color }}">
+  <div class="study-card-heading"><p class="muted">{{ annotation.book.title }}</p><a href="{{ url_for('reader.read', book_id=annotation.book_id, annotation=annotation.id) }}">Open source →</a></div>
+  <blockquote>“{{ annotation.selected_text }}”</blockquote>
+  {% if annotation.note %}<p>{{ annotation.note }}</p>{% endif %}
+</article>{% endfor %}
+</section>{% else %}<section class="empty panel"><h2>No annotations found</h2><p>Highlight a passage while reading to see it here.</p></section>{% endif %}
+{% endblock %}

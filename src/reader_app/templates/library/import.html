@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Import a book · Reader{% endblock %}
+{% block page_class %}narrow{% endblock %}
+{% block content %}
+<section class="panel">
+  <h1>Import a book</h1>
+  <p class="muted">TXT, Markdown, and EPUB files up to 10 MB are supported.</p>
+  <form method="post" enctype="multipart/form-data" class="stacked-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label>Book file<input name="book" type="file" accept=".txt,.md,.markdown,.epub,text/plain,text/markdown,application/epub+zip" required></label>
+    <label>Title <span class="muted">(optional)</span><input name="title"></label>
+    <label>Author <span class="muted">(optional)</span><input name="author"></label>
+    <label>Language <span class="muted">(optional)</span><input name="language" placeholder="English, 中文, Русский…"></label>
+    {% if duplicate %}<label class="duplicate-choice"><input name="allow_duplicate" type="checkbox" value="yes"> Import another copy intentionally</label>{% endif %}
+    <button class="primary" type="submit">Import and read</button>
+  </form>
+</section>
+{% endblock %}

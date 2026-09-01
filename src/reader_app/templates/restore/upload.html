@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Restore backup · Reader{% endblock %}
+{% block page_class %}narrow{% endblock %}
+{% block content %}
+<section class="panel">
+  <h1>Restore a backup</h1>
+  <p>Upload a backup created by Reader. Nothing will be changed until you review the preview and confirm.</p>
+  <ul class="muted">
+    <li>Books already in your library are detected by content hash and skipped.</li>
+    <li>Imported records receive new IDs and belong only to your current account.</li>
+    <li>Passwords and the original account identity are never restored.</li>
+  </ul>
+  <form method="post" enctype="multipart/form-data" class="stacked-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label>Reader backup ZIP<input type="file" name="backup" accept=".zip,application/zip" required></label>
+    <button class="primary" type="submit">Validate and preview</button>
+  </form>
+</section>
+{% endblock %}

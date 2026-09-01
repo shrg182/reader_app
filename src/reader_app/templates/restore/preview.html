@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Preview restoration · Reader{% endblock %}
+{% block page_class %}narrow{% endblock %}
+{% block content %}
+<section class="panel">
+  <h1>Restore preview</h1>
+  <p>{{ preview.books|length }} books, {{ preview.annotations }} annotations, and {{ preview.vocabulary }} vocabulary entries passed validation.</p>
+  <div class="restore-books">
+    {% for book in preview.books %}<article>
+      <strong>{{ book.title }}</strong>
+      <span class="muted">{{ book.author or 'Unknown author' }} · {{ book.file_type|upper }}</span>
+      {% if book.duplicate %}<span class="duplicate-badge">Already present — will skip</span>{% endif %}
+    </article>{% endfor %}
+  </div>
+  <p class="muted">Restoration is transactional: if validation or database work fails, no partial records are retained.</p>
+  <form method="post" action="{{ url_for('restore.apply') }}" onsubmit="return confirm('Restore this backup into your current account?')">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="token" value="{{ token }}">
+    <button class="primary" type="submit">Restore into my library</button>
+    <a class="button" href="{{ url_for('restore.upload') }}">Cancel</a>
+  </form>
+</section>
+{% endblock %}

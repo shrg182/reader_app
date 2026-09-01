@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf_token() }}">
+  <title>{% block title %}Reader{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="{{ url_for('library.index') }}">Reader</a>
+    {% if current_user.is_authenticated %}
+      <nav>
+        <a href="{{ url_for('library.index') }}">Library</a>
+        <a href="{{ url_for('study.vocabulary') }}">Vocabulary</a>
+        <a href="{{ url_for('study.notes') }}">Notes</a>
+        <a href="{{ url_for('exports.backup_zip') }}">Backup</a>
+        <a href="{{ url_for('restore.upload') }}">Restore</a>
+        <span>{{ current_user.username }}</span>
+        <form method="post" action="{{ url_for('auth.logout') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="link-button" type="submit">Log out</button>
+        </form>
+      </nav>
+    {% endif %}
+  </header>
+  <main class="page {% block page_class %}{% endblock %}">
+    {% for category, message in get_flashed_messages(with_categories=true) %}
+      <div class="flash {{ category }}">{{ message }}</div>
+    {% endfor %}
+    {% block content %}{% endblock %}
+  </main>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

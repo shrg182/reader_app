@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Manage {{ book.title }} · Reader{% endblock %}
+{% block page_class %}narrow{% endblock %}
+{% block content %}
+<section class="panel">
+  <h1>Manage book</h1>
+  <form method="post" class="stacked-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label>Title<input name="title" value="{{ book.title }}" maxlength="255" required></label>
+    <label>Author<input name="author" value="{{ book.author or '' }}" maxlength="255"></label>
+    <label>Language<input name="language" value="{{ book.language or '' }}" maxlength="32"></label>
+    <button class="primary" type="submit">Save details</button>
+  </form>
+  <hr>
+  <h2>Export study material</h2>
+  <p><a href="{{ url_for('exports.book_markdown', book_id=book.id) }}">Download notes and vocabulary as Markdown</a></p>
+  <hr>
+  <h2>Delete book</h2>
+  <p class="muted">This permanently removes the book, progress, highlights, notes, and vocabulary.</p>
+  <form method="post" action="{{ url_for('library.delete_book', book_id=book.id) }}" onsubmit="return confirm('Permanently delete this book and all of its study records?')">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button class="danger" type="submit">Delete book</button>
+  </form>
+</section>
+{% endblock %}

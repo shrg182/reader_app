@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Vocabulary · Reader{% endblock %}
+{% block content %}
+<div class="page-heading"><div><h1>Vocabulary</h1><p class="muted">Words and phrases collected while reading.</p></div><a class="button" href="{{ url_for('exports.vocabulary_csv') }}">Export CSV</a></div>
+<form class="filter-bar" method="get">
+  <input name="q" value="{{ query }}" placeholder="Search terms, definitions, and notes" aria-label="Search vocabulary">
+  <select name="book_id" aria-label="Filter by book"><option value="">All books</option>{% for book in books %}<option value="{{ book.id }}"{% if selected_book == book.id %} selected{% endif %}>{{ book.title }}</option>{% endfor %}</select>
+  <select name="language" aria-label="Filter by language"><option value="">All languages</option>{% for language in languages %}<option value="{{ language }}"{% if selected_language == language %} selected{% endif %}>{{ language }}</option>{% endfor %}</select>
+  <button type="submit">Filter</button>
+</form>
+{% if entries %}<section class="study-list">
+{% for entry in entries %}<article class="study-card">
+  <div class="study-card-heading"><div><h2>{{ entry.term }}</h2><p class="muted">{{ entry.book.title }}{% if entry.language %} · {{ entry.language }}{% endif %}</p></div><a href="{{ url_for('reader.read', book_id=entry.book_id, vocabulary=entry.id) }}">Open source →</a></div>
+  {% if entry.context %}<blockquote>“{{ entry.context }}”</blockquote>{% endif %}
+  <form method="post" action="{{ url_for('study.update_vocabulary', entry_id=entry.id) }}" class="study-edit-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label>Language<input name="language" value="{{ entry.language }}"></label>
+    <label>Definition<textarea name="definition" rows="3">{{ entry.definition }}</textarea></label>
+    <label>Personal note<textarea name="note" rows="2">{{ entry.note }}</textarea></label>
+    <button class="primary" type="submit">Save changes</button>
+  </form>
+  <form method="post" action="{{ url_for('study.delete_vocabulary', entry_id=entry.id) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button type="submit">Delete</button>
+  </form>
+</article>{% endfor %}
+</section>{% else %}<section class="empty panel"><h2>No vocabulary found</h2><p>Select a word or phrase while reading to save it here.</p></section>{% endif %}
+{% endblock %}

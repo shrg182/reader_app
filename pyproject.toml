@@ -1,0 +1,38 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "reader-app"
+version = "0.1.0"
+description = "A clean foundation for a multilingual two-pane Reader application."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Private" }
+authors = [{ name = "Ruixing Shi" }]
+dependencies = [
+    "bleach>=6.1",
+    "flask>=3.0",
+    "flask-login>=0.6",
+    "flask-migrate>=4.0",
+    "flask-sqlalchemy>=3.1",
+    "flask-wtf>=1.2",
+    "markdown>=3.6",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "ruff>=0.6"]
+
+[project.scripts]
+reader-app = "reader_app.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/reader_app"]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
