@@ -33,3 +33,15 @@ def register(client, username="reader", email="reader@example.com"):
         data={"username": username, "email": email, "password": "password123"},
         follow_redirects=True,
     )
+
+
+def pytest_addoption(parser):
+    parser.addoption('--run-browser', action='store_true', help='Run Playwright browser regressions')
+
+
+def pytest_collection_modifyitems(config, items):
+    if not config.getoption('--run-browser'):
+        skip = pytest.mark.skip(reason='Use --run-browser to run browser regressions')
+        for item in items:
+            if '/browser/' in str(item.path):
+                item.add_marker(skip)

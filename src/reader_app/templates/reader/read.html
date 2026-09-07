@@ -8,6 +8,7 @@
   <p class="muted">{{ book.author or 'Unknown author' }}</p>
   <div class="progress-track"><span id="progressBar"></span></div>
   <p id="progressLabel" class="muted">0% read</p>
+  <p id="progressSaveStatus" class="muted" role="status" aria-live="polite"></p>
   {% if chapters %}
   <details class="contents" open>
     <summary>Contents</summary>
@@ -23,13 +24,13 @@
     <label>Column width<input id="readerColumnWidth" type="range" min="520" max="1000" step="20"></label>
   </details>
 </aside>
-<article id="readingSurface" class="reading-surface theme-{{ preferences.theme }}" data-book-id="{{ book.id }}" data-progress="{{ progress }}" data-theme="{{ preferences.theme }}" data-font-family="{{ preferences.font_family }}" data-font-size="{{ preferences.font_size }}" data-line-height="{{ preferences.line_height }}" data-column-width="{{ preferences.column_width }}"{% if active_chapter %} data-chapter-id="{{ active_chapter.id }}"{% endif %}{% if jump_offset is not none %} data-jump-offset="{{ jump_offset }}"{% endif %}>
+<article id="readingSurface" class="reading-surface theme-{{ preferences.theme }}" data-book-id="{{ book.id }}" data-progress-key="{{ current_user.id }}:{{ book.stored_filename }}" data-progress="{{ progress }}" data-theme="{{ preferences.theme }}" data-font-family="{{ preferences.font_family }}" data-font-size="{{ preferences.font_size }}" data-line-height="{{ preferences.line_height }}" data-column-width="{{ preferences.column_width }}"{% if active_chapter %} data-chapter-id="{{ active_chapter.id }}" data-chapter-ordinal="{{ active_chapter.ordinal }}" data-chapter-count="{{ chapters|length }}" data-saved-chapter="{{ saved_chapter }}"{% endif %}{% if jump_offset is not none %} data-jump-offset="{{ jump_offset }}"{% endif %}>
   {% if active_chapter %}<nav class="chapter-navigation" aria-label="Chapter navigation">
     {% if active_chapter.ordinal > 1 %}<a href="{{ url_for('reader.read', book_id=book.id, chapter=active_chapter.ordinal - 1) }}">← Previous</a>{% else %}<span></span>{% endif %}
     <strong>{{ active_chapter.title }}</strong>
     {% if active_chapter.ordinal < chapters|length %}<a href="{{ url_for('reader.read', book_id=book.id, chapter=active_chapter.ordinal + 1) }}">Next →</a>{% else %}<span></span>{% endif %}
   </nav>{% endif %}
-  {% if is_markdown %}<div id="prose" class="prose">{{ content }}</div>{% else %}<div id="prose" class="prose plain-text">{{ content }}</div>{% endif %}
+  {% if is_markdown %}<div id="prose" tabindex="0" aria-label="Book text" class="prose">{{ content }}</div>{% else %}<div id="prose" tabindex="0" aria-label="Book text" class="prose plain-text">{{ content }}</div>{% endif %}
   {% if active_chapter %}<nav class="chapter-navigation chapter-navigation-bottom" aria-label="Chapter navigation">
     {% if active_chapter.ordinal > 1 %}<a href="{{ url_for('reader.read', book_id=book.id, chapter=active_chapter.ordinal - 1) }}">← Previous</a>{% else %}<span></span>{% endif %}
     <span>{{ active_chapter.ordinal }} / {{ chapters|length }}</span>
@@ -38,6 +39,7 @@
 </article>
 <aside class="annotation-sidebar">
   <h2>Highlights & notes</h2>
+  <button id="selectionAction" class="primary selection-action" hidden>Add note or word</button>
   <section id="newAnnotation" class="annotation-editor" hidden>
     <p class="eyebrow">New highlight</p>
     <blockquote id="selectionPreview"></blockquote>
@@ -63,4 +65,4 @@
 </aside>
 <script id="annotationData" type="application/json">{{ annotations|tojson }}</script>
 {% endblock %}
-{% block scripts %}<script src="{{ url_for('static', filename='reader.js') }}" defer></script>{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='progress.js') }}" defer></script><script src="{{ url_for('static', filename='reader.js') }}" defer></script>{% endblock %}

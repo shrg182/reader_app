@@ -10,9 +10,10 @@
   const saved = Number(surface.dataset.progress || 0);
   let annotations = JSON.parse(document.getElementById("annotationData").textContent);
   let pendingSelection = null;
-  let lastSent = saved;
+  const saveStatus = document.getElementById("progressSaveStatus");
   let timer;
   let preferenceTimer;
+  let positionReady = false;
 
   const apiRequest = async (url, options) => {
     const response = await fetch(url, {
@@ -86,20 +87,27 @@
     return null;
   };
   const applyHighlight = (annotation) => {
-    const start = textPoint(annotation.start_offset);
-    const end = textPoint(annotation.end_offset);
-    if (!start || !end) return;
-    const range = document.createRange();
-    range.setStart(start.node, start.offset);
-    range.setEnd(end.node, end.offset);
-    const mark = document.createElement("mark");
-    mark.className = `reader-highlight ${annotation.color}`;
-    mark.dataset.annotationId = annotation.id;
-    try {
-      mark.appendChild(range.extractContents());
-      range.insertNode(mark);
-    } catch (_) {
-      // A malformed legacy anchor should never prevent the book from opening.
+    // Wrap individual text segments so cross-paragraph and overlapping selections
+    // never extract or duplicate the document's block elements.
+    const walker = document.createTreeWalker(prose, NodeFilter.SHOW_TEXT);
+    const segments = [];
+    let node;
+    let consumed = 0;
+    while ((node = walker.nextNode())) {
+      const start = Math.max(0, annotation.start_offset - consumed);
+      const end = Math.min(node.length, annotation.end_offset - consumed);
+      if (start < end) segments.push({ node, start, end });
+      consumed += node.length;
+    }
+    if (annotation.end_offset > consumed) return;
+    for (const { node, start, end } of segments) {
+      const range = document.createRange();
+      range.setStart(node, start);
+      range.setEnd(node, end);
+      const mark = document.createElement("mark");
+      mark.className = `reader-highlight ${annotation.color}`;
+      mark.dataset.annotationId = annotation.id;
+      range.surroundContents(mark);
     }
   };
   const renderHighlights = () => {
@@ -118,7 +126,7 @@
       </section>`).join("") : '<p class="muted">No highlights yet.</p>';
   };
   const offsetsForSelection = (selection) => {
-    if (!selection.rangeCount || selection.isCollapsed) return null;
+    if (!selection || !selection.rangeCount || selection.isCollapsed) return null;
     const range = selection.getRangeAt(0);
     if (!prose.contains(range.commonAncestorContainer)) return null;
     const before = document.createRange();
@@ -129,17 +137,52 @@
     return { start_offset: startOffset, end_offset: startOffset + selectedText.length, selected_text: selectedText };
   };
 
-  prose.addEventListener("mouseup", () => {
-    pendingSelection = offsetsForSelection(window.getSelection());
-    if (!pendingSelection || !pendingSelection.selected_text.trim()) return;
-    document.getElementById("selectionPreview").textContent = `“${pendingSelection.selected_text.slice(0, 240)}”`;
-    document.getElementById("newAnnotation").hidden = false;
+  const selectionAction = document.getElementById("selectionAction");
+  const editor = document.getElementById("newAnnotation");
+  const captureSelection = () => {
+    const selected = offsetsForSelection(window.getSelection());
+    // Moving focus to the editor must retain the selection being annotated.
+    if (!selected || !selected.selected_text.trim()) return;
+    pendingSelection = selected;
+    document.getElementById("selectionPreview").textContent = `“${selected.selected_text.slice(0, 240)}”`;
+    editor.hidden = false;
+    selectionAction.hidden = false;
     document.getElementById("selectionHint").hidden = true;
+  };
+  document.addEventListener("selectionchange", captureSelection);
+  prose.addEventListener("pointerup", captureSelection);
+  prose.addEventListener("keyup", captureSelection);
+  prose.addEventListener("keydown", (event) => {
+    const directions = { ArrowLeft: "backward", ArrowRight: "forward",
+      ArrowUp: "backward", ArrowDown: "forward" };
+    if (!event.shiftKey || !directions[event.key]) return;
+    const selection = window.getSelection();
+    if (!selection.modify) return;
+    if (!selection.anchorNode || !prose.contains(selection.anchorNode)) {
+      const first = textPoint(0);
+      if (!first) return;
+      selection.collapse(first.node, 0);
+    }
+    event.preventDefault();
+    selection.modify("extend", directions[event.key],
+      ["ArrowUp", "ArrowDown"].includes(event.key) ? "line" : "character");
+    captureSelection();
   });
-  document.getElementById("cancelAnnotation").addEventListener("click", () => {
+  selectionAction.addEventListener("click", () => {
+    editor.classList.add("selection-open");
+    document.getElementById("newNote").focus({ preventScroll: true });
+  });
+  const clearSelection = () => {
     pendingSelection = null;
-    document.getElementById("newAnnotation").hidden = true;
+    editor.hidden = true;
+    editor.classList.remove("selection-open");
+    selectionAction.hidden = true;
     document.getElementById("selectionHint").hidden = false;
+    window.getSelection().removeAllRanges();
+  };
+  document.getElementById("cancelAnnotation").addEventListener("click", clearSelection);
+  editor.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") clearSelection();
   });
   document.getElementById("saveAnnotation").addEventListener("click", async () => {
     if (!pendingSelection) return;
@@ -154,7 +197,7 @@
         }),
       });
       annotations.push(created);
-      pendingSelection = null;
+      clearSelection();
       document.getElementById("newNote").value = "";
       document.getElementById("newAnnotation").hidden = true;
       document.getElementById("selectionHint").hidden = false;
@@ -184,7 +227,7 @@
           context: allText.slice(contextStart, contextEnd).trim(),
         }),
       });
-      pendingSelection = null;
+      clearSelection();
       document.getElementById("newNote").value = "";
       document.getElementById("newDefinition").value = "";
       document.getElementById("newAnnotation").hidden = true;
@@ -222,25 +265,56 @@
   });
 
   const setDisplay = (progress) => {
-    const percent = Math.round(progress * 100);
+    const overall = chapterId
+      ? (Number(surface.dataset.chapterOrdinal) - 1 + progress) / Number(surface.dataset.chapterCount)
+      : progress;
+    const percent = Math.round(overall * 100);
     bar.style.width = `${percent}%`;
     label.textContent = `${percent}% read`;
   };
   const currentProgress = () => {
-    const maximum = document.documentElement.scrollHeight - window.innerHeight;
-    return maximum > 0 ? Math.max(0, Math.min(1, window.scrollY / maximum)) : 1;
+    const top = prose.getBoundingClientRect().top + window.scrollY;
+    const maximum = Math.max(0, prose.offsetHeight - window.innerHeight + 100);
+    return maximum > 0 ? Math.max(0, Math.min(1, (window.scrollY + 100 - top) / maximum)) : 1;
   };
-  const saveProgress = (progress) => {
-    if (Math.abs(progress - lastSent) < 0.002) return;
-    lastSent = progress;
-    apiRequest(`/reader/${bookId}/progress`, {
-      method: "POST", body: JSON.stringify({ progress, chapter_id: chapterId }), keepalive: true,
-    }).catch(() => {});
+  const queue = new ReaderProgressQueue({
+    key: `reader-position:${surface.dataset.progressKey}`,
+    storage: {
+      getItem: (key) => localStorage.getItem(key),
+      setItem: (key, value) => localStorage.setItem(key, value),
+      removeItem: (key) => localStorage.removeItem(key),
+    },
+    send: (position) => apiRequest(`/reader/${bookId}/progress`, {
+      method: "POST", body: JSON.stringify(position), keepalive: true,
+    }),
+    status: (message) => { saveStatus.textContent = message; },
+  });
+  const localPosition = queue.pending;
+  const explicitTarget = new URLSearchParams(location.search);
+  if (localPosition?.chapter && localPosition.chapter_id !== chapterId
+      && !["chapter", "annotation", "vocabulary"].some(key => explicitTarget.has(key))) {
+    location.replace(`${location.pathname}?chapter=${localPosition.chapter}`);
+    return;
+  }
+  const restored = localPosition && localPosition.chapter_id === chapterId
+    ? localPosition.progress : saved;
+  let lastCaptured = restored;
+  const captureProgress = () => {
+    if (!positionReady) return;
+    const progress = currentProgress();
+    if (Math.abs(progress - lastCaptured) < 0.002) return;
+    lastCaptured = progress;
+    queue.update(progress, chapterId, chapterId ? Number(surface.dataset.chapterOrdinal) : null);
   };
+  window.addEventListener("online", () => queue.flush());
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") { captureProgress(); queue.flush(); }
+  });
   renderHighlights();
   renderList();
-  setDisplay(saved);
-  requestAnimationFrame(() => {
+  setDisplay(restored);
+  queue.flush();
+  const restorePosition = () => requestAnimationFrame(() => {
     if (surface.dataset.jumpOffset !== undefined) {
       const target = textPoint(Number(surface.dataset.jumpOffset));
       const element = target && target.node.parentElement;
@@ -249,14 +323,24 @@
         element.classList.add("source-target");
       }
     } else {
-      window.scrollTo(0, saved * (document.documentElement.scrollHeight - window.innerHeight));
+      const top = prose.getBoundingClientRect().top + window.scrollY;
+      const maximum = Math.max(0, prose.offsetHeight - window.innerHeight + 100);
+      window.scrollTo(0, Math.max(0, top - 100 + restored * maximum));
+    }
+    positionReady = true;
+    if (chapterId && surface.dataset.savedChapter !== surface.dataset.chapterOrdinal) {
+      queue.update(restored, chapterId, Number(surface.dataset.chapterOrdinal));
+      queue.flush();
     }
   });
+  if (document.readyState === "complete") restorePosition();
+  else window.addEventListener("load", restorePosition, { once: true });
   window.addEventListener("scroll", () => {
     const progress = currentProgress();
     setDisplay(progress);
     clearTimeout(timer);
-    timer = setTimeout(() => saveProgress(progress), 400);
+    captureProgress();
+    timer = setTimeout(() => queue.flush(), 400);
   }, { passive: true });
-  window.addEventListener("pagehide", () => saveProgress(currentProgress()));
+  window.addEventListener("pagehide", () => { captureProgress(); queue.flush(); });
 })();

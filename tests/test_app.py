@@ -609,3 +609,58 @@ def test_safe_error_pages(client):
     assert response.status_code == 404
     assert b"Page not found" in response.data
     assert b"Traceback" not in response.data
+
+
+@pytest.mark.parametrize('filename', ['红楼梦.txt', 'Война.md', '多语言.epub'])
+def test_unicode_filename_import(client, app, filename):
+    register(client)
+    payload = make_epub() if filename.endswith('.epub') else '你好 Привет'.encode()
+    response = client.post('/books/import', data={'book': (io.BytesIO(payload), filename)})
+    assert response.status_code == 302
+    with app.app_context():
+        book = db.session.scalar(db.select(Book))
+        assert book.original_filename == filename
+        assert book.file_type == Path(filename).suffix[1:]
+        assert book.stored_filename != filename
+        if book.file_type != 'epub':
+            assert book.title == Path(filename).stem
+    assert client.get(response.location).status_code == 200
+
+
+@pytest.mark.parametrize('failure', ['commit', 'asset'])
+def test_failed_import_cleans_up_files_and_database(client, app, monkeypatch, failure):
+    register(client)
+    if failure == 'commit':
+        def fail_commit():
+            raise RuntimeError('injected commit failure')
+        monkeypatch.setattr(db.session, 'commit', fail_commit)
+    else:
+        original = Path.write_bytes
+
+        def fail_asset(path, data):
+            original(path, data[:1])
+            raise RuntimeError('injected asset write failure')
+        monkeypatch.setattr(Path, 'write_bytes', fail_asset)
+    with pytest.raises(RuntimeError, match='injected'):
+        client.post('/books/import', data={'book': (io.BytesIO(make_epub()), 'book.epub')})
+    with app.app_context():
+        assert db.session.scalar(db.select(db.func.count(Book.id))) == 0
+        assert db.session.scalar(db.select(db.func.count(BookChapter.id))) == 0
+    assert not [p for p in Path(app.config['BOOK_UPLOAD_FOLDER']).rglob('*') if p.is_file()]
+
+
+def test_epub_overall_progress_preserves_chapter_position(client, app):
+    register(client)
+    client.post('/books/import', data={'book': (io.BytesIO(make_epub()), 'book.epub')})
+    with app.app_context():
+        book = db.session.scalar(db.select(Book))
+        book_id = book.id
+        first, second = [chapter.id for chapter in book.chapters]
+    for chapter_id, position, overall in [(first, 1, 50), (second, 0.4, 70), (second, 1, 100)]:
+        response = client.post(f'/reader/{book_id}/progress',
+                               json={'chapter_id': chapter_id, 'progress': position})
+        assert response.status_code == 200
+        assert f'{overall}% read'.encode() in client.get('/').data
+        page = client.get(f'/reader/{book_id}').data
+        assert f'data-progress="{float(position)}"'.encode() in page
+        assert f'data-chapter-id="{chapter_id}"'.encode() in page

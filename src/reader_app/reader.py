@@ -169,6 +169,7 @@ def read(book_id: int):
         chapters=chapters,
         preferences=preference_data(current_user.preference),
         active_chapter=active_chapter,
+        saved_chapter=locator.get("chapter", 1),
     )
 
 

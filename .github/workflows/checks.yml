@@ -1,0 +1,24 @@
+name: Checks
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ['3.11', '3.14']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: python -m pip install -e '.[dev,browser]'
+      - run: ruff check .
+      - run: pytest
+      - run: node --test tests/js/*.test.cjs
+      - run: python -m playwright install --with-deps chromium
+      - run: pytest tests/browser --run-browser
